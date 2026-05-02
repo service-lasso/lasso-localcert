@@ -1,14 +1,15 @@
 # lasso-localcert
 
-`lasso-localcert` is the canonical Service Lasso service repo for the
-`localcert` core utility provider.
+`lasso-localcert` is the Service Lasso core provider for local TLS certificate
+generation. It packages `mkcert` and `localcert` binaries, then Service Lasso
+runs manifest-owned setup steps to generate certificates into the service data
+directory.
 
-It publishes small platform archives that contain deterministic local
-development certificate material for services such as Traefik. The provider is
-not a long-running daemon; Service Lasso installs/configures it, then exposes
-certificate paths through global environment values.
+This service is not a long-running daemon by default. It is installed and
+configured as `@localcert`, then setup creates the files consumed by routing
+services such as `@traefik`.
 
-## Release Assets
+## What It Publishes
 
 Each release publishes:
 
@@ -24,19 +25,26 @@ Release tags use the Service Lasso version pattern:
 yyyy.m.d-<shortsha>
 ```
 
-The released `service.json` keeps `artifact.source.channel` set to `latest` for
-new consumers. Core `service-lasso` pins a verified release tag in its checked-in
+The released `service.json` uses `artifact.source.channel: "latest"` for new
+consumers. Core `service-lasso` pins a verified release tag in its checked-in
 baseline manifest.
 
-## Service Lasso Contract
+## Runtime Contract
 
-The service manifest declares:
+The manifest declares:
 
-- provider role with no managed daemon start requirement
-- native archive acquisition from GitHub releases
-- certificate material under `${SERVICE_ARTIFACT_ROOT}/runtime/certs`
-- donor-aligned global environment outputs: `CERT_FILE`, `CERT_KEY`,
-  `CERT_PFX`, and `CAROOT_CERT`
+- service id `@localcert`
+- provider role
+- dependency on `@java` for Java trust-store support
+- `CAROOT`, `TRUST_STORES`, `HOME`, `PATH`, `CERTS_DOMAINS`, and
+  `SERVICE_DATA_FILE_*` environment values
+- global outputs `CERT_FILE`, `CERT_KEY`, `CERT_PFX`, `CAROOT_KEY`, and
+  `CAROOT_CERT`
+- setup steps for `mkcert` PFX generation, `mkcert` key/cert generation,
+  optional root CA installation, and optional `localcert` renewal
+
+Generated certificate material is written to `${SERVICE_DATA_PATH}`. Release
+archives must not contain fake pre-generated runtime certificates.
 
 ## Local Verification
 
@@ -44,5 +52,7 @@ The service manifest declares:
 npm test
 ```
 
-This packages the current platform, extracts the archive, verifies the package
-metadata, and checks the expected certificate files and manifest globals.
+Verification packages the current target platform, extracts the archive, checks
+that `mkcert` and `localcert` binaries are present, proves static generated
+certificates are not packaged, and runs the non-manual `mkcert` setup flow on
+the host platform to prove generated outputs exist in the service data path.

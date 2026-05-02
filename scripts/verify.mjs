@@ -8,6 +8,21 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const platform = process.env.TARGET_PLATFORM ?? process.platform;
 const version = process.env.LOCALCERT_VERSION ?? "0.1.0";
 
+const binaryNames = {
+  win32: {
+    mkcert: "mkcert.exe",
+    localcert: "localcert.exe",
+  },
+  linux: {
+    mkcert: "mkcert",
+    localcert: "localcert",
+  },
+  darwin: {
+    mkcert: "mkcert",
+    localcert: "localcert",
+  },
+};
+
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -44,21 +59,101 @@ async function assertFile(filePath) {
   }
 }
 
-const manifest = JSON.parse(await readFile(path.join(repoRoot, "service.json"), "utf8"));
-if (
-  manifest.id !== "localcert" ||
-  manifest.role !== "provider" ||
-  manifest.artifact?.source?.repo !== "service-lasso/lasso-localcert" ||
-  manifest.artifact?.source?.channel !== "latest"
-) {
-  throw new Error(`Unexpected localcert manifest identity: ${JSON.stringify(manifest)}`);
+function resolveTemplate(value, variables) {
+  return value.replace(/\$\{([^}]+)\}/g, (_match, key) => variables[key.trim()] ?? _match);
 }
 
-for (const key of ["LOCALCERT_ROOT", "CERT_FILE", "CERT_KEY", "CERT_PFX", "CAROOT_CERT"]) {
-  if (typeof manifest.globalenv?.[key] !== "string" || !manifest.globalenv[key].includes("SERVICE_ARTIFACT_ROOT")) {
-    throw new Error(`Expected ${key} to resolve from SERVICE_ARTIFACT_ROOT.`);
+function assertManifestContract(manifest) {
+  if (
+    manifest.id !== "@localcert" ||
+    manifest.role !== "provider" ||
+    manifest.artifact?.source?.repo !== "service-lasso/lasso-localcert" ||
+    manifest.artifact?.source?.channel !== "latest"
+  ) {
+    throw new Error(`Unexpected localcert manifest identity: ${JSON.stringify(manifest)}`);
+  }
+
+  for (const key of ["CAROOT", "TRUST_STORES", "HOME", "PATH", "CERTS_DOMAINS", "SERVICE_DATA_FILE_PFX", "SERVICE_DATA_FILE_KEY", "SERVICE_DATA_FILE_CERT"]) {
+    if (typeof manifest.env?.[key] !== "string") {
+      throw new Error(`Expected manifest env.${key}.`);
+    }
+  }
+
+  for (const key of ["CERT_FILE", "CERT_KEY", "CERT_PFX", "CAROOT_KEY", "CAROOT_CERT"]) {
+    if (typeof manifest.globalenv?.[key] !== "string" || !manifest.globalenv[key].includes("SERVICE_DATA_PATH")) {
+      throw new Error(`Expected ${key} to resolve from SERVICE_DATA_PATH.`);
+    }
+  }
+
+  for (const stepId of ["generate-pfx", "generate-key-cert", "install-root-ca", "renew-localcert"]) {
+    if (!manifest.setup?.steps?.[stepId]) {
+      throw new Error(`Expected setup step ${stepId}.`);
+    }
+  }
+
+  if (manifest.setup.steps["install-root-ca"].rerun !== "manual" || manifest.setup.steps["renew-localcert"].rerun !== "manual") {
+    throw new Error("Trust-store install and localcert renewal steps must be explicit manual setup steps.");
   }
 }
+
+async function verifySetupExecution(extractRoot, manifest) {
+  if (platform !== process.platform) {
+    console.log(`[lasso-localcert] skipped live setup verification for target ${platform} on host ${process.platform}`);
+    return;
+  }
+
+  const names = binaryNames[platform];
+  const serviceRoot = path.join(repoRoot, "output", "verify", version, platform, "service");
+  const dataRoot = path.join(serviceRoot, "data");
+  await rm(serviceRoot, { recursive: true, force: true });
+  await mkdir(dataRoot, { recursive: true });
+
+  const variables = {
+    SERVICE_DATA_PATH: dataRoot.replace(/\\/g, "/"),
+    SERVICE_EXECUTABLE_HOME: extractRoot.replace(/\\/g, "/"),
+  };
+  const env = {
+    ...process.env,
+    CAROOT: resolveTemplate(manifest.env.CAROOT, variables),
+    TRUST_STORES: manifest.env.TRUST_STORES,
+    HOME: resolveTemplate(manifest.env.HOME, variables),
+    PATH: `${extractRoot}${path.delimiter}${process.env.PATH ?? ""}`,
+    CERTS_DOMAINS: manifest.env.CERTS_DOMAINS,
+    SERVICE_DATA_FILE_PFX: resolveTemplate(manifest.env.SERVICE_DATA_FILE_PFX, variables),
+    SERVICE_DATA_FILE_KEY: resolveTemplate(manifest.env.SERVICE_DATA_FILE_KEY, variables),
+    SERVICE_DATA_FILE_CERT: resolveTemplate(manifest.env.SERVICE_DATA_FILE_CERT, variables),
+  };
+  const domains = env.CERTS_DOMAINS.split(/\s+/).filter(Boolean);
+
+  await run(path.join(extractRoot, names.mkcert), [
+    "-pkcs12",
+    "-p12-file",
+    env.SERVICE_DATA_FILE_PFX,
+    "-client",
+    ...domains,
+  ], { env });
+  await run(path.join(extractRoot, names.mkcert), [
+    "-key-file",
+    env.SERVICE_DATA_FILE_KEY,
+    "-cert-file",
+    env.SERVICE_DATA_FILE_CERT,
+    "-client",
+    ...domains,
+  ], { env });
+
+  for (const file of [
+    env.SERVICE_DATA_FILE_PFX,
+    env.SERVICE_DATA_FILE_KEY,
+    env.SERVICE_DATA_FILE_CERT,
+    path.join(dataRoot, "rootCA-key.pem"),
+    path.join(dataRoot, "rootCA.pem"),
+  ]) {
+    await assertFile(file);
+  }
+}
+
+const manifest = JSON.parse(await readFile(path.join(repoRoot, "service.json"), "utf8"));
+assertManifestContract(manifest);
 
 const artifact = await packageLocalcert(platform, version);
 const verifyRoot = path.join(repoRoot, "output", "verify", version, platform);
@@ -68,11 +163,14 @@ await rm(verifyRoot, { recursive: true, force: true });
 await mkdir(extractRoot, { recursive: true });
 await run("tar", ["-xf", artifact, "-C", extractRoot]);
 
-const packageMetadata = JSON.parse(
-  await readFile(path.join(extractRoot, "SERVICE-LASSO-PACKAGE.json"), "utf8"),
-);
+const names = binaryNames[platform];
+if (!names) {
+  throw new Error(`Unsupported verification platform: ${platform}`);
+}
+
+const packageMetadata = JSON.parse(await readFile(path.join(extractRoot, "SERVICE-LASSO-PACKAGE.json"), "utf8"));
 if (
-  packageMetadata.serviceId !== "localcert" ||
+  packageMetadata.serviceId !== "@localcert" ||
   packageMetadata.packagedBy !== "service-lasso/lasso-localcert" ||
   packageMetadata.version !== version ||
   packageMetadata.platform !== platform
@@ -80,9 +178,21 @@ if (
   throw new Error(`Unexpected package metadata: ${JSON.stringify(packageMetadata)}`);
 }
 
-const certsRoot = path.join(extractRoot, "runtime", "certs");
-for (const file of ["localhost.crt", "localhost.key", "localhost.pfx", "caroot.crt"]) {
-  await assertFile(path.join(certsRoot, file));
+for (const file of ["SERVICE-LASSO-PACKAGE.json", names.mkcert, names.localcert]) {
+  await assertFile(path.join(extractRoot, file));
 }
+
+for (const staticRuntimeFile of ["runtime/certs/localhost.crt", "runtime/certs/localhost.key", "runtime/certs/localhost.pfx", "runtime/certs/caroot.crt"]) {
+  try {
+    await stat(path.join(extractRoot, staticRuntimeFile));
+    throw new Error(`Package must not contain static generated certificate material: ${staticRuntimeFile}`);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+await verifySetupExecution(extractRoot, manifest);
 
 console.log(`[lasso-localcert] verification passed for ${version} on ${platform}`);

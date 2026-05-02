@@ -1,17 +1,74 @@
 {
-  "id": "localcert",
+  "id": "@localcert",
   "name": "Core Local Certificate Utility",
-  "description": "Release-backed local certificate bootstrap utility for Service Lasso routing dependencies.",
+  "description": "Release-backed mkcert/localcert provider that generates local TLS material for Service Lasso routing dependencies.",
   "version": "0.1.0",
   "role": "provider",
   "enabled": true,
+  "depend_on": [
+    "@java"
+  ],
+  "env": {
+    "CAROOT": "${SERVICE_DATA_PATH}",
+    "TRUST_STORES": "java",
+    "HOME": "${SERVICE_DATA_PATH}",
+    "PATH": "${SERVICE_EXECUTABLE_HOME}",
+    "CERTS_DOMAINS": "*.typerefinery.localhost *.localhost",
+    "SERVICE_DATA_FILE_PFX": "${SERVICE_DATA_PATH}/mkcert.pfx",
+    "SERVICE_DATA_FILE_KEY": "${SERVICE_DATA_PATH}/mkcert.key",
+    "SERVICE_DATA_FILE_CERT": "${SERVICE_DATA_PATH}/mkcert.pem"
+  },
   "globalenv": {
     "LOCALCERT_ENABLED": "true",
-    "LOCALCERT_ROOT": "${SERVICE_ARTIFACT_ROOT}",
-    "CERT_FILE": "${SERVICE_ARTIFACT_ROOT}/runtime/certs/localhost.crt",
-    "CERT_KEY": "${SERVICE_ARTIFACT_ROOT}/runtime/certs/localhost.key",
-    "CERT_PFX": "${SERVICE_ARTIFACT_ROOT}/runtime/certs/localhost.pfx",
-    "CAROOT_CERT": "${SERVICE_ARTIFACT_ROOT}/runtime/certs/caroot.crt"
+    "LOCALCERT_ROOT": "${SERVICE_DATA_PATH}",
+    "CERT_FILE": "${SERVICE_DATA_PATH}/mkcert.pem",
+    "CERT_KEY": "${SERVICE_DATA_PATH}/mkcert.key",
+    "CERT_PFX": "${SERVICE_DATA_PATH}/mkcert.pfx",
+    "CAROOT_KEY": "${SERVICE_DATA_PATH}/rootCA-key.pem",
+    "CAROOT_CERT": "${SERVICE_DATA_PATH}/rootCA.pem"
+  },
+  "setup": {
+    "steps": {
+      "generate-pfx": {
+        "description": "Generate a client PFX certificate with mkcert into the service data directory.",
+        "commandline": {
+          "win32": "mkcert.exe -pkcs12 -p12-file \"${SERVICE_DATA_FILE_PFX}\" -client ${CERTS_DOMAINS}",
+          "default": "mkcert -pkcs12 -p12-file \"${SERVICE_DATA_FILE_PFX}\" -client ${CERTS_DOMAINS}"
+        },
+        "timeoutSeconds": 120,
+        "rerun": "ifMissing"
+      },
+      "generate-key-cert": {
+        "description": "Generate PEM key/certificate files with mkcert into the service data directory.",
+        "depend_on": [
+          "@localcert:generate-pfx"
+        ],
+        "commandline": {
+          "win32": "mkcert.exe -key-file \"${SERVICE_DATA_FILE_KEY}\" -cert-file \"${SERVICE_DATA_FILE_CERT}\" -client ${CERTS_DOMAINS}",
+          "default": "mkcert -key-file \"${SERVICE_DATA_FILE_KEY}\" -cert-file \"${SERVICE_DATA_FILE_CERT}\" -client ${CERTS_DOMAINS}"
+        },
+        "timeoutSeconds": 120,
+        "rerun": "ifMissing"
+      },
+      "install-root-ca": {
+        "description": "Optionally install the mkcert root CA into the configured trust stores.",
+        "commandline": {
+          "win32": "mkcert.exe -install",
+          "default": "mkcert -install"
+        },
+        "timeoutSeconds": 120,
+        "rerun": "manual"
+      },
+      "renew-localcert": {
+        "description": "Optionally run the localcert ACME renewal helper into the service data directory.",
+        "commandline": {
+          "win32": "localcert.exe -dataDir \"${SERVICE_DATA_PATH}\" -acceptTerms -localCert \"${SERVICE_DATA_PATH}/cert.pem\" -localKey \"${SERVICE_DATA_PATH}/key.pem\" -forceRenew",
+          "default": "localcert -dataDir \"${SERVICE_DATA_PATH}\" -acceptTerms -localCert \"${SERVICE_DATA_PATH}/cert.pem\" -localKey \"${SERVICE_DATA_PATH}/key.pem\" -forceRenew"
+        },
+        "timeoutSeconds": 300,
+        "rerun": "manual"
+      }
+    }
   },
   "artifact": {
     "kind": "archive",
@@ -23,15 +80,18 @@
     "platforms": {
       "win32": {
         "assetName": "lasso-localcert-0.1.0-win32.zip",
-        "archiveType": "zip"
+        "archiveType": "zip",
+        "command": ".\\localcert.exe"
       },
       "linux": {
         "assetName": "lasso-localcert-0.1.0-linux.tar.gz",
-        "archiveType": "tar.gz"
+        "archiveType": "tar.gz",
+        "command": "./localcert"
       },
       "darwin": {
         "assetName": "lasso-localcert-0.1.0-darwin.tar.gz",
-        "archiveType": "tar.gz"
+        "archiveType": "tar.gz",
+        "command": "./localcert"
       }
     }
   }

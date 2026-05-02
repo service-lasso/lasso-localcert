@@ -36,6 +36,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+
       - name: Verify package
         run: npm test
         env:
