@@ -63,6 +63,46 @@ function resolveTemplate(value, variables) {
   return value.replace(/\$\{([^}]+)\}/g, (_match, key) => variables[key.trim()] ?? _match);
 }
 
+function assertHealthchecksContract(manifest) {
+  if (manifest.healthcheck !== undefined) {
+    throw new Error("Manifest must use canonical healthchecks[] instead of singular healthcheck.");
+  }
+
+  if (manifest.healthchecks === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(manifest.healthchecks)) {
+    throw new Error("Manifest healthchecks must be an array when declared.");
+  }
+
+  const checkIds = new Set();
+  for (const [index, check] of manifest.healthchecks.entries()) {
+    if (!check || typeof check !== "object" || Array.isArray(check)) {
+      throw new Error(`Manifest healthchecks[${index}] must be an object.`);
+    }
+
+    if (typeof check.id !== "string" || check.id.trim() === "") {
+      throw new Error(`Manifest healthchecks[${index}] must declare a stable id.`);
+    }
+
+    if (checkIds.has(check.id)) {
+      throw new Error(`Manifest healthchecks[] contains duplicate id ${check.id}.`);
+    }
+    checkIds.add(check.id);
+
+    if (typeof check.type !== "string" || check.type.trim() === "") {
+      throw new Error(`Manifest healthchecks[${index}] must declare a type.`);
+    }
+
+    for (const unsupported of ["tcphost", "tcpport"]) {
+      if (check[unsupported] !== undefined) {
+        throw new Error(`Manifest healthchecks[${index}] must not contain ${unsupported}.`);
+      }
+    }
+  }
+}
+
 function assertManifestContract(manifest) {
   if (
     manifest.id !== "@localcert" ||
@@ -130,6 +170,8 @@ function assertManifestContract(manifest) {
   if (manifest.setup.steps["install-root-ca"].rerun !== "manual" || manifest.setup.steps["renew-localcert"].rerun !== "manual") {
     throw new Error("Trust-store install and localcert renewal steps must be explicit manual setup steps.");
   }
+
+  assertHealthchecksContract(manifest);
 }
 
 async function verifySetupExecution(extractRoot, manifest) {
