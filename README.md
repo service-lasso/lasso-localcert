@@ -36,10 +36,12 @@ The manifest declares:
 - service id `@localcert`
 - provider role
 - dependency on `@java` for Java trust-store support
+- canonical `endpoints[]` resource entries for the generated PEM certificate,
+  PEM key, PFX bundle, root CA certificate, and root CA key
 - `CAROOT`, `TRUST_STORES`, `HOME`, `PATH`, `CERTS_DOMAINS`, and
   `SERVICE_DATA_FILE_*` environment values
 - global outputs `CERT_FILE`, `CERT_KEY`, `CERT_PFX`, `CAROOT_KEY`, and
-  `CAROOT_CERT`
+  `CAROOT_CERT`, kept as compatibility aliases for the endpoint resource paths
 - setup steps for `mkcert` PFX generation, `mkcert` key/cert generation,
   optional root CA installation, and optional `localcert` renewal
 
