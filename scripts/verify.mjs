@@ -85,6 +85,42 @@ function assertManifestContract(manifest) {
     }
   }
 
+  const endpointById = new Map((manifest.endpoints ?? []).map((entry) => [entry.id, entry]));
+  const expectedEndpointUrls = {
+    cert_pem: "${SERVICE_DATA_PATH}/mkcert.pem",
+    cert_key: "${SERVICE_DATA_PATH}/mkcert.key",
+    cert_pfx: "${SERVICE_DATA_PATH}/mkcert.pfx",
+    root_ca_cert: "${SERVICE_DATA_PATH}/rootCA.pem",
+    root_ca_key: "${SERVICE_DATA_PATH}/rootCA-key.pem",
+  };
+  for (const [id, url] of Object.entries(expectedEndpointUrls)) {
+    const endpoint = endpointById.get(id);
+    if (!endpoint) {
+      throw new Error(`Expected manifest endpoint ${id}.`);
+    }
+    if (endpoint.kind !== "url" || endpoint.url !== url || endpoint.exposure !== "local" || endpoint.required !== true) {
+      throw new Error(`Unexpected manifest endpoint ${id}: ${JSON.stringify(endpoint)}`);
+    }
+    for (const unsupported of ["env", "globalenv", "export", "exports"]) {
+      if (endpoint[unsupported] !== undefined) {
+        throw new Error(`Endpoint ${id} must not contain ${unsupported}.`);
+      }
+    }
+  }
+
+  const expectedGlobalAliases = {
+    CERT_FILE: expectedEndpointUrls.cert_pem,
+    CERT_KEY: expectedEndpointUrls.cert_key,
+    CERT_PFX: expectedEndpointUrls.cert_pfx,
+    CAROOT_CERT: expectedEndpointUrls.root_ca_cert,
+    CAROOT_KEY: expectedEndpointUrls.root_ca_key,
+  };
+  for (const [key, value] of Object.entries(expectedGlobalAliases)) {
+    if (manifest.globalenv[key] !== value) {
+      throw new Error(`Expected globalenv.${key} to stay aligned with canonical endpoint resource ${value}.`);
+    }
+  }
+
   for (const stepId of ["generate-pfx", "generate-key-cert", "install-root-ca", "renew-localcert"]) {
     if (!manifest.setup?.steps?.[stepId]) {
       throw new Error(`Expected setup step ${stepId}.`);

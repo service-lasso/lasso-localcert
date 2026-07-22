@@ -27,6 +27,48 @@
     "CAROOT_KEY": "${SERVICE_DATA_PATH}/rootCA-key.pem",
     "CAROOT_CERT": "${SERVICE_DATA_PATH}/rootCA.pem"
   },
+  "endpoints": [
+    {
+      "id": "cert_pem",
+      "kind": "url",
+      "label": "PEM certificate",
+      "url": "${SERVICE_DATA_PATH}/mkcert.pem",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "cert_key",
+      "kind": "url",
+      "label": "PEM certificate key",
+      "url": "${SERVICE_DATA_PATH}/mkcert.key",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "cert_pfx",
+      "kind": "url",
+      "label": "Client PFX certificate",
+      "url": "${SERVICE_DATA_PATH}/mkcert.pfx",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "root_ca_cert",
+      "kind": "url",
+      "label": "Root CA certificate",
+      "url": "${SERVICE_DATA_PATH}/rootCA.pem",
+      "exposure": "local",
+      "required": true
+    },
+    {
+      "id": "root_ca_key",
+      "kind": "url",
+      "label": "Root CA key",
+      "url": "${SERVICE_DATA_PATH}/rootCA-key.pem",
+      "exposure": "local",
+      "required": true
+    }
+  ],
   "setup": {
     "steps": {
       "generate-pfx": {
