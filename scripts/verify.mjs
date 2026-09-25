@@ -167,6 +167,24 @@ function assertManifestContract(manifest) {
     }
   }
 
+  const expectedExecutableByStep = {
+    "generate-pfx": "mkcert",
+    "generate-key-cert": "mkcert",
+    "install-root-ca": "mkcert",
+    "renew-localcert": "localcert",
+  };
+  for (const [stepId, executable] of Object.entries(expectedExecutableByStep)) {
+    const commandline = manifest.setup.steps[stepId].commandline;
+    for (const [target, command] of Object.entries(commandline ?? {})) {
+      if (typeof command !== "string" || !command.includes("${SERVICE_EXECUTABLE_HOME}")) {
+        throw new Error(`Setup step ${stepId}.${target} must invoke its packaged executable through SERVICE_EXECUTABLE_HOME.`);
+      }
+      if (!command.includes(executable)) {
+        throw new Error(`Setup step ${stepId}.${target} must invoke ${executable}.`);
+      }
+    }
+  }
+
   if (manifest.setup.steps["install-root-ca"].rerun !== "manual" || manifest.setup.steps["renew-localcert"].rerun !== "manual") {
     throw new Error("Trust-store install and localcert renewal steps must be explicit manual setup steps.");
   }

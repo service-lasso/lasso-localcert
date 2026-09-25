@@ -74,8 +74,8 @@
       "generate-pfx": {
         "description": "Generate a client PFX certificate with mkcert into the service data directory.",
         "commandline": {
-          "win32": "mkcert.exe -pkcs12 -p12-file \"${SERVICE_DATA_FILE_PFX}\" -client ${CERTS_DOMAINS}",
-          "default": "mkcert -pkcs12 -p12-file \"${SERVICE_DATA_FILE_PFX}\" -client ${CERTS_DOMAINS}"
+          "win32": "\"${SERVICE_EXECUTABLE_HOME}\\\\mkcert.exe\" -pkcs12 -p12-file \"${SERVICE_DATA_FILE_PFX}\" -client ${CERTS_DOMAINS}",
+          "default": "\"${SERVICE_EXECUTABLE_HOME}/mkcert\" -pkcs12 -p12-file \"${SERVICE_DATA_FILE_PFX}\" -client ${CERTS_DOMAINS}"
         },
         "timeoutSeconds": 120,
         "rerun": "ifMissing"
@@ -86,8 +86,8 @@
           "@localcert:generate-pfx"
         ],
         "commandline": {
-          "win32": "mkcert.exe -key-file \"${SERVICE_DATA_FILE_KEY}\" -cert-file \"${SERVICE_DATA_FILE_CERT}\" -client ${CERTS_DOMAINS}",
-          "default": "mkcert -key-file \"${SERVICE_DATA_FILE_KEY}\" -cert-file \"${SERVICE_DATA_FILE_CERT}\" -client ${CERTS_DOMAINS}"
+          "win32": "\"${SERVICE_EXECUTABLE_HOME}\\\\mkcert.exe\" -key-file \"${SERVICE_DATA_FILE_KEY}\" -cert-file \"${SERVICE_DATA_FILE_CERT}\" -client ${CERTS_DOMAINS}",
+          "default": "\"${SERVICE_EXECUTABLE_HOME}/mkcert\" -key-file \"${SERVICE_DATA_FILE_KEY}\" -cert-file \"${SERVICE_DATA_FILE_CERT}\" -client ${CERTS_DOMAINS}"
         },
         "timeoutSeconds": 120,
         "rerun": "ifMissing"
@@ -95,8 +95,8 @@
       "install-root-ca": {
         "description": "Optionally install the mkcert root CA into the configured trust stores.",
         "commandline": {
-          "win32": "mkcert.exe -install",
-          "default": "mkcert -install"
+          "win32": "\"${SERVICE_EXECUTABLE_HOME}\\\\mkcert.exe\" -install",
+          "default": "\"${SERVICE_EXECUTABLE_HOME}/mkcert\" -install"
         },
         "timeoutSeconds": 120,
         "rerun": "manual"
@@ -104,8 +104,8 @@
       "renew-localcert": {
         "description": "Optionally run the localcert ACME renewal helper into the service data directory.",
         "commandline": {
-          "win32": "localcert.exe -dataDir \"${SERVICE_DATA_PATH}\" -acceptTerms -localCert \"${SERVICE_DATA_PATH}/cert.pem\" -localKey \"${SERVICE_DATA_PATH}/key.pem\" -forceRenew",
-          "default": "localcert -dataDir \"${SERVICE_DATA_PATH}\" -acceptTerms -localCert \"${SERVICE_DATA_PATH}/cert.pem\" -localKey \"${SERVICE_DATA_PATH}/key.pem\" -forceRenew"
+          "win32": "\"${SERVICE_EXECUTABLE_HOME}\\\\localcert.exe\" -dataDir \"${SERVICE_DATA_PATH}\" -acceptTerms -localCert \"${SERVICE_DATA_PATH}/cert.pem\" -localKey \"${SERVICE_DATA_PATH}/key.pem\" -forceRenew",
+          "default": "\"${SERVICE_EXECUTABLE_HOME}/localcert\" -dataDir \"${SERVICE_DATA_PATH}\" -acceptTerms -localCert \"${SERVICE_DATA_PATH}/cert.pem\" -localKey \"${SERVICE_DATA_PATH}/key.pem\" -forceRenew"
         },
         "timeoutSeconds": 300,
         "rerun": "manual"
