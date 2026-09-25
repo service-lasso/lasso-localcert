@@ -29,6 +29,10 @@ The released `service.json` uses `artifact.source.channel: "latest"` for new
 consumers. Core `service-lasso` pins a verified release tag in its checked-in
 baseline manifest.
 
+Pull requests and pushes to `develop` build and verify every supported
+package. Publication is a manual, release-owner action from `develop`; it is
+not a side effect of ordinary development merges.
+
 ## Runtime Contract
 
 The manifest declares:
@@ -45,6 +49,9 @@ The manifest declares:
 - setup steps for `mkcert` PFX generation, `mkcert` key/cert generation,
   optional root CA installation, and optional `localcert` renewal
 
+Every setup command invokes the binary from `${SERVICE_EXECUTABLE_HOME}`. A
+consumer therefore does not need `mkcert` or `localcert` on the host `PATH`.
+
 Generated certificate material is written to `${SERVICE_DATA_PATH}`. Release
 archives must not contain fake pre-generated runtime certificates.
 
@@ -56,5 +63,6 @@ npm test
 
 Verification packages the current target platform, extracts the archive, checks
 that `mkcert` and `localcert` binaries are present, proves static generated
-certificates are not packaged, and runs the non-manual `mkcert` setup flow on
-the host platform to prove generated outputs exist in the service data path.
+certificates are not packaged, asserts that setup commands are scoped to the
+packaged artifact, and runs the non-manual `mkcert` setup flow on the host
+platform to prove generated outputs exist in the service data path.
